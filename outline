@@ -1,0 +1,336 @@
+/*
+ * REVISION NOTES:
+ * 
+ * I recoded Goto_Xyz() and Goto_Polar(). Hopefully they work now, I haven't tested them yet.
+ * now Goto_Polar() runs off of Goto_Xyz() (before, it was the other way around).
+ * removed a couple of unnecessary constants.
+ * 
+ */
+
+
+
+
+
+/*
+ * Spiderdog Library R2
+ * 
+ * HOW TO USE THIS CODE
+ * 
+ * First things first, the geometry on this problem is really rough, and I haven't been able to figure it out. So there are several
+ * important functions that don't work yet. You can write angles to the individual servos, but getting it to respond to coordinates
+ * doesn't work. Good news is, this interface works just fine, and all we have to do is nail down the geometry and put it into the
+ * functions, and everything will be good.
+ * 
+ * this code treats each leg as its own object. I've named the legs FR, FL, BR, and BL (front right, front left, back right, back left)
+ * Each leg can be told to move in 3 different ways: polar coordinates, cartesian coordinates, and by directly giving it angles to go to.
+ * for example, FR.Goto_Polar(100.0,45.0,23.0);
+ * You can find the position of each foot in a similar way. for example, FR.Get_X();
+ * I'm making functions that use multiple legs (walk, sit, etc). You can find those definitions a little before the setup() function.
+ * Check the drive for documentation on how angles and coordinate systems are defined.
+ * Most of the stuff here should be fairly well commented, but let me know if something is confusing!
+ * 
+ * if there's something I wasn't sure about or that will need to be fixed or tweaked later, I added a comment "fixme" with a description, so you can just search those if you are looking for debugging things
+ * 
+ * 
+ * 
+ * <3 Nate
+ * 
+ */
+
+
+
+
+//servo angle constraints
+#define SERVO_3_MAX 170.0 //the second servos can't move a full 180 degrees because they'll hit something if they do.
+                          //this says how far they can go (fixme I'm guessing, we should test later)
+#define THETA_MIN 45.0
+#define THETA_MAX 135.0
+
+//constants related to robot geometry
+#define GEAR_RATIO 1.2 //fixme
+#define L1 30.0 //(mm) fixme
+#define L2 66.0//fixme
+#define L3 44.0//fixme
+
+//pin definitions
+#define FL1 3 //front left leg, first servo     fixme
+#define FL2 5 //fixme
+#define FL3 6//fixme
+#define FR1 4//fixme
+#define FR2 8//fixme
+#define FR3 8//fixme
+#define BL1 7//fixme
+#define BL2 8//fixme
+#define BL3 9//fixme
+#define BR1 10//fixme
+#define BR2 11//fixme
+#define BR3 12//fixme
+
+#include <Servo.h>
+
+
+
+//ok so we're doing this with classes. I'm making a class called Spider_Dog_Leg, which is just a robot leg.
+//this makes writing functions easier (at least for my brain). It looks like separate class files is a pain in
+//Arduino, so it's just gonna chill here. fixme if you want to put the class and class header in their own files, that would clean this file up
+
+class Spider_Dog_Leg
+{
+  public:
+//each spiderdog leg can be controlled in 3 ways (method definitions at end of file)
+    void Goto_Polar(double rho, double theta, double phi);       //Moves foot to a point in 3d space as defined by spherical coordinates (mm, degrees)
+    void Goto_Xyz(double x, double y, double z);                 //Moves foot to a point in 3d space defined by xyz coordinates (mm)
+    void Goto_Angles(double angle_one, double angle_two, double angle_three); //Moves foot by specifying the angles each servo should go to (degrees)
+//you can get the current position from each spiderdog leg
+    double Get_Rho();
+    double Get_Theta();
+    double Get_Phi();
+    double Get_X();
+    double Get_Y();
+    double Get_Z();
+    double Get_One();   //technically redundant, since I left one, two, and three public, but I thought it would be nice to have a consistent format for getting information
+    double Get_Two();
+    double Get_Three();
+//for setup
+    void Attach(const int pin_one,const int pin_two,const int pin_three); //because Arduino is lovely, we can't attach servos to spiderdog legs in a constructor, we have to do it in setup.
+                                                                          //we can't just declare each spiderdog leg in setup because it needs to be global in order to be accessed by the helper functions. Super convenient.
+//each spiderdog leg has 3 servos in it
+    Servo one; //servo closest to hub that runs the gears
+    Servo two; //servo in the middle
+    Servo three; //servo furthest out
+};
+
+
+
+
+
+
+//function declarations for main
+void Rest_Mode(); //the robot sits down and folds legs up.
+void Spider_Ready_Mode();  //the robot stands still, ready for action as a spider.
+void Dog_Ready_Mode();     //the robot stands still, ready for action as a dog. Fixme not coded yet
+void Spider_Walk(double direction_angle, double speed_percentage);  //the robot walks like a spider, in a direction (degrees) and at a speed (100.0 is full speed, 0.0 is stopped). Fixme not coded yet
+void Dog_Walk(double direction_angle, double speed_percentage);     //the robot walks like a dog, in a direction (degrees) and at a speed (100.0 is full speed, 0.0 is stopped). Fixme not coded yet
+void Shift_Weight(double direction_angle, double distance, double speed_percentage); //the robot keeps its feet in place and shifts the body in a direction (degrees), at a speed (0.0 to 100.0), and a distance (mm). Fixme not coded yet
+void Splat();             //the robot lies on the ground, legs spread out, after a long and difficult day
+
+
+//create four spiderdog legs.
+//global so that the helper functions and setup() can access them
+Spider_Dog_Leg FL;
+Spider_Dog_Leg FR;
+Spider_Dog_Leg BL;
+Spider_Dog_Leg BR;
+
+void setup() 
+{
+//attach servo pins to spiderdog legs
+  FL.Attach(FL1,FL2,FL3);
+  FR.Attach(FR1,FR2,FR3);
+  BL.Attach(BL1,BL2,BL3);
+  BR.Attach(BR1,BR2,BR3);
+  Serial.begin(9600);       //for debugging
+}
+
+
+
+
+
+
+//MAIN
+
+
+
+void loop() 
+{
+ //Nothing here yet :)
+}
+
+
+
+
+
+
+
+
+void Rest_Mode()
+{
+  FR.Goto_Angles(THETA_MIN, 180.0, SERVO_3_MAX);
+  FL.Goto_Angles(THETA_MIN, 180.0, SERVO_3_MAX);
+  BR.Goto_Angles(THETA_MIN, 180.0, SERVO_3_MAX);
+  BL.Goto_Angles(THETA_MIN, 180.0, SERVO_3_MAX);
+  return;
+}
+
+void Spider_Ready_Mode()    //fixme will not work until we get the geometry going
+{
+  FR.Goto_Xyz(60.0, 60.0, -60.0);
+  FL.Goto_Xyz(60.0, 60.0, -60.0);
+  BR.Goto_Xyz(60.0, 60.0, -60.0);
+  BL.Goto_Xyz(60.0, 60.0, -60.0);
+  return;
+}
+
+void Dog_Ready_Mode()   //fixme not coded yet. Also, since the servos can only move so far, we need to make sure we aren't telling them to go somewhere they can't go.
+{
+  return;
+}
+
+void Spider_Walk(double direction_angle, double speed_percentage)
+{
+  //fixme not coded yet
+}
+
+void Dog_Walk(double direction_angle, double speed_percentage)
+{
+  //fixme not coded yet
+}
+void Shift_Weight(double direction_angle, double distance, double speed_percentage) //the robot keeps its feet in place and shifts the body in a direction (degrees), at a speed (0.0 to 100.0), and a distance (mm)
+{
+  //fixme not coded yet
+  //I think this one we can just get the z positions for all the legs, and then tell each of them to go opposite the specified direction (keeping z constant),
+  //which should move the body the right way without moving the feet.
+}
+
+void Splat()
+{
+  //fixme not coded yet. Also not super necessary, I just thought it was kind of funny
+}
+
+void Spider_Dog_Leg::Goto_Polar(double rho, double theta, double phi)         //Moves foot to a point in 3d space as defined by spherical coordinates (mm, degrees)
+{
+  //fixme this function won't work until Goto_Xyz() works (it's untested)
+  //This function is kind of just a shell for  Goto_Xyz()
+
+  //check inputs (Goto_Xyz() will do this too, but we can just check it twice for fun.)
+  if(rho < 0) rho = 0;  //rho has to be positive.
+  if(theta < THETA_MIN) theta = THETA_MIN;
+  if(theta > THETA_MAX) theta = THETA_MAX;
+  if(phi < 0.0) phi = 0.0;
+  if(phi > 180.0) phi = 180.0;
+
+  //convert to rectangular
+  double x = rho * sin(phi*3.1416/180.0) * cos(theta*3.1416/180.0);
+  double y = rho * sin(phi*3.1416/180.0) * sin(theta*3.1416/180.0);
+  double z = rho * cos(phi*3.1416/180.0);
+  
+  Goto_Xyz(x,y,z);
+  
+  return;
+}
+
+void Spider_Dog_Leg::Goto_Xyz(double x, double y, double z)                 //Moves foot to a point in 3d space defined by xyz coordinates (mm)
+{
+  //fixme this function needs to be tested
+  
+  //first, check to see if we're telling servo one to go somewhere it can actually go
+  while(atan(y/x)*180.0/3.1416 < THETA_MIN) //told it to go to a theta that's too small
+  {
+    x = x + 0.1;
+    Serial.print("\nTheta was too small :(\n");
+  }
+   while(atan(y/x)*180.0/3.1416 > THETA_MAX)  //told it to go to a theta that's too big
+  {
+    y = y + 0.1;
+    Serial.print("\nTheta was too big :(\n");
+  }
+  one.write(atan(y/x)*180.0/3.1416*GEAR_RATIO);    //write servo one. To fix the range of atan(), you would have to add 90 deg, but since theta is measured from the y axis anyway, it cancels. I think. fixme if this function isn't working maybe this is the problem
+  //^^also fixme I'm not sure if we want to multiply or divide by the gear ratio
+
+  
+  //now, we're going to shift coordinate systems from xyz to the two-dimensional n-z plane, where the n axis runs along the line of the leg.
+  double n = sqrt(x*x + y*y);
+  n = n - L1;     //move the origin from the first joint to the second joint (it simplifies the geometry a lot)
+  double L4 = sqrt(n*n + z*z);    //L4 is the distance from the new origin to the end of the foot
+
+  //chech some more conditions.
+  if(n < 0) n = 0;   //n is always positive
+  bool straight_flag = 0; //if the leg is going to be in a straight line, this is 1. This is an edge case because it will make our trig functions unhappy.
+  while(L4 > (L2 + L3)) //going to a point further than we can reach
+  {
+    n = n - 0.1;
+    z = z - (0.1 * z/z);  //z gets bigger if z is negative, gets smaller if it's positive
+    straight_flag = 1;
+    Serial.print("\nThat point is too far away :(\n");
+  }
+  while((180.0 - acos((L4*L4 - L3*L3 - L2*L2)/(2*L3*L4))*180.0/3.1416) > SERVO_3_MAX) //going to a point too close to the second servo (the leg can't go that far) (law of cosines)
+  {
+    n = n + 0.1;
+    z = z + (0.1 * z/z);  //z gets bigger if z is positive, gets smaller if it's negative
+    Serial.print("\nThat point was too close to servo 3 :(\n");
+  }
+
+  //handle the edge case of the leg being straight\
+  if(straight_flag)
+  {
+    three.write(0); //straight
+    two.write(atan(z/n)*180.0*3.1416 + 90.0); //arctangent. the +90 deg is for atan range correction. fixme this might be the problem if the function doesn't work
+  }
+  else //(not straight leg)
+  {
+    two.write(atan(z/n)*180.0/3.1416 - acos((L3*L3 - L2*L2 - L4*L4) / (2*L2*L4))*180.0/3.1416 + 90.0);  //the plus 90 is for atan range correction. fixme this might be the problem if the function doesn't work
+    three.write(180.0 - acos((L4*L4 - L3*L3 - L2*L2)/(2*L3*L4))*180.0/3.1416);
+  }
+}
+
+void Spider_Dog_Leg::Goto_Angles(double angle_one, double angle_two, double angle_three) //Moves foot by specifying the angles each servo should go to (degrees)
+{
+  one.write(angle_one);
+  two.write(angle_two);
+  three.write(angle_three);
+}
+
+double Spider_Dog_Leg::Get_Rho()
+{//fixme untested until we can get the geometry functions worked out
+  double phi = Get_Phi();
+  return((L1*cos((phi-90.0)*3.1416/180.0)) + (L2*cos((phi-two.read())*3.1416/180.0)) + (L3*cos((phi-(two.read()+three.read()))*3.1416/180.0)));
+}
+
+double Spider_Dog_Leg::Get_Theta()
+{
+  return one.read();
+}
+
+double Spider_Dog_Leg::Get_Phi()
+{//fixme untested until we can get the geometry functions worked out
+  return three.read() - two.read();
+}
+
+double Spider_Dog_Leg::Get_X()
+{
+  return 0.0;//fixme not coded yet
+}
+
+double Spider_Dog_Leg::Get_Y()
+{
+  return 0.0;//fixme not coded yet
+}
+
+double Spider_Dog_Leg::Get_Z()
+{
+  return 0.0;//fixme not coded yet
+}
+
+double Spider_Dog_Leg::Get_One()
+{//fixme double check that this function and the next two work, I feel like they do but I don't remember
+  return one.read();
+}
+
+double Spider_Dog_Leg::Get_Two()
+{
+  return two.read();
+}
+
+double Spider_Dog_Leg::Get_Three()
+{
+  return three.read();
+}
+
+void Spider_Dog_Leg::Attach(const int pin_one,const int pin_two,const int pin_three) 
+{
+  one.attach(pin_one);
+  two.attach(pin_two);
+  three.attach(pin_three);
+}
+
+
